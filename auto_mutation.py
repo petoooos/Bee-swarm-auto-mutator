@@ -3,12 +3,16 @@ import pyautogui
 import threading
 import time
 from pynput import mouse
-from PIL import Image
-from PIL import ImageGrab
+from PIL import ImageGrab, Image, ImageEnhance, ImageFilter
 from pynput import keyboard
+from text_recognision import detect_mutation
+import queue
 
-mutations = ["Attack", "Convert Amount", "Gather Amount", "Energy ", "Bee Ability Rate", "Critical Chance", "Movespeed",
-             "Instant Conversion"]
+
+mutations = [["Attack","%","+"], ["Convert Amount","%","+"], ["Gather Amount","%","+"], ["Energy ","%"],
+             ["Bee Ability Rate","%"], ["Critical Chance","%"], ["Movespeed","+"],
+             ["Instant Conversion","%"]]
+
 mutations_color = [(235,59,55),(255,204,66),(208,255,127),(0,0,0),(185,165,240),(68,200,108),(81,191,241),(245,255,28)]
 selected_colors = []
 stop_event = None
@@ -18,6 +22,9 @@ cordinates_1 = None
 cordinates_2 = None
 cordinates_3 = None
 search_thread = None
+entries = []
+detected = ""
+
 
 def search_for_mutation():
     global stop_event, search_thread
@@ -32,10 +39,15 @@ def search_for_mutation():
                 if stop_event.is_set():
                     return
                 pixel_color = screenshot.getpixel((x, y))
-                for target_color in selected_colors:
-                    print(target_color)
+                for id_color in range(len(selected_colors)):
+                    target_color = selected_colors[id_color]
                     if pixel_color[0] in range(target_color[1][0]-10,target_color[1][0]+10) and pixel_color[1] in range(target_color[1][1]-10,target_color[1][1]+10) and pixel_color[2] in range(target_color[1][2]-10,target_color[1][2]+10):
-                        debug_label.configure(text="FOUND")
+                        result_queue = queue.Queue()
+                        detection_thread = threading.Thread(target=detect_mutation, args=(result_queue,))
+                        detection_thread.start()
+                        detection_thread.join()
+                        result = result_queue.get()
+                        debug_label.configure(text="FOUND"+result)
                         stop_event.set()
                         return
 
@@ -126,6 +138,7 @@ def show_cordinates():
         print("ERROR")
 
 def start():
+    collect_entries()
     global selected_colors, search_thread, stop_event
     selected_colors = []
     for idx, var in enumerate(check_vars):
@@ -146,6 +159,11 @@ def start():
     else:
         print("ERROR")
 
+def collect_entries():
+    collected_data = [entry.get() for entry in entries]
+    print(collected_data)
+
+
 def on_press(key):
     try:
         if key.char == 'p':
@@ -160,8 +178,8 @@ def start_keyboard_listener():
 button_width = 7
 
 root = tk.Tk()
-root.title("Roblox auto mutator v1.0")
-root.geometry("825x125")
+root.title("Roblox auto mutator v1.1")
+root.geometry("1005x165")
 root.attributes("-topmost", True)
 
 cordinate_1_label = tk.Label(text="1 cordinate:",font=12)
@@ -178,24 +196,44 @@ start_button = tk.Button(text="START",font=12,width=button_width, command=start)
 
 debug_label = tk.Label(text="",font=100,fg="red")
 
-cordinate_1_label.grid(row=1,column=0)
-cordinate_1_value_label.grid(row=1,column=1)
-cordinate_1_button.grid(row=1,column=2)
-cordinate_2_label.grid(row=2,column=0)
-cordinate_2_value_label.grid(row=2,column=1)
-cordinate_2_button.grid(row=2,column=2)
-cordinate_3_label.grid(row=3,column=0)
-cordinate_3_value_label.grid(row=3,column=1)
-cordinate_3_button.grid(row=3,column=2)
-show_select_button.grid(row=2,column=3)
-start_button.grid(row=2,column=4)
+check_vars = [tk.IntVar() for _ in mutations]
+r,c = 0,0
+
+for idx, option in enumerate(mutations):
+    radio = tk.Checkbutton(root, text=option[0], variable=check_vars[idx],command=on_select)
+    if idx%3==0:
+        r+=1
+        c=0
+    radio.grid(row=r,column=c,sticky="w")
+    for m in range(len(option[:-1])):
+        entry = tk.Entry(root, width=12, font=12)
+        entry.insert(0, "0")
+        entries.append(entry)
+        entry.grid(row=r, column=c + m +1, sticky="w")
+        if (c+m+1)%2:
+            tk.Label(text="+%00").grid(row=0,column=c+m+1)
+        else:
+            tk.Label(text="+000").grid(row=0, column=c + m + 1)
+    c += 3
+
+
+
+
+cordinate_1_label.grid(row=r+1,column=0)
+cordinate_1_value_label.grid(row=r+1,column=1)
+cordinate_1_button.grid(row=r+1,column=2)
+cordinate_2_label.grid(row=r+2,column=0)
+cordinate_2_value_label.grid(row=r+2,column=1)
+cordinate_2_button.grid(row=r+2,column=2)
+cordinate_3_label.grid(row=r+3,column=0)
+cordinate_3_value_label.grid(row=r+3,column=1)
+cordinate_3_button.grid(row=r+3,column=2)
+show_select_button.grid(row=r+2,column=3)
+start_button.grid(row=r+2,column=4)
 
 debug_label.grid(row=2, column=5, sticky="e")
 
-check_vars = [tk.IntVar() for _ in mutations]
-for idx, option in enumerate(mutations):
-    radio = tk.Checkbutton(root, text=option, variable=check_vars[idx], command=on_select)
-    radio.grid(row=0,column=idx)
+
 
 listener_thread = threading.Thread(target=start_keyboard_listener)
 listener_thread.daemon = True
